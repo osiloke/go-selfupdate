@@ -42,8 +42,8 @@ import (
 	"runtime"
 	"time"
 
-	"github.com/kardianos/osext"
 	"github.com/inconshreveable/go-update"
+	"github.com/kardianos/osext"
 	"github.com/kr/binarydist"
 )
 
@@ -96,8 +96,11 @@ func (u *Updater) getExecRelativeDir(dir string) string {
 // BackgroundRun starts the update check and apply cycle.
 func (u *Updater) BackgroundRun() error {
 	os.MkdirAll(u.getExecRelativeDir(u.Dir), 0777)
+	log.Println("Check Update")
 	if u.wantUpdate() {
+		log.Println("Wants Update")
 		if err := up.CanUpdate(); err != nil {
+			log.Println("Cant update because ", err)
 			// fail
 			return err
 		}
@@ -108,6 +111,7 @@ func (u *Updater) BackgroundRun() error {
 		//}
 		// TODO(bgentry): logger isn't on Windows. Replace w/ proper error reports.
 		if err := u.update(); err != nil {
+			log.Println("Error updating", err)
 			return err
 		}
 	}
@@ -119,7 +123,7 @@ func (u *Updater) wantUpdate() bool {
 	if u.CurrentVersion == "dev" || readTime(path).After(time.Now()) {
 		return false
 	}
-	wait := 24*time.Hour + randDuration(24*time.Hour)
+	wait := 5*time.Second + randDuration(5*time.Second)
 	return writeTime(path, time.Now().Add(wait))
 }
 
@@ -128,6 +132,7 @@ func (u *Updater) update() error {
 	if err != nil {
 		return err
 	}
+	log.Println("Opening old path", path)
 	old, err := os.Open(path)
 	if err != nil {
 		return err
@@ -138,6 +143,8 @@ func (u *Updater) update() error {
 	if err != nil {
 		return err
 	}
+
+	log.Println("Comparing versions", u.Info.Version, u.CurrentVersion)
 	if u.Info.Version == u.CurrentVersion {
 		return nil
 	}
@@ -215,10 +222,12 @@ func (u *Updater) fetchAndApplyPatch(old io.Reader) ([]byte, error) {
 }
 
 func (u *Updater) fetchAndVerifyFullBin() ([]byte, error) {
+	log.Println("Fetching full binary")
 	bin, err := u.fetchBin()
 	if err != nil {
 		return nil, err
 	}
+	log.Println("Fetched full binary")
 	verified := verifySha(bin, u.Info.Sha256)
 	if !verified {
 		return nil, ErrHashMismatch
@@ -266,6 +275,7 @@ func readTime(path string) time.Time {
 		return time.Time{}
 	}
 	if err != nil {
+		log.Println("Error reading time", err)
 		return time.Now().Add(1000 * time.Hour)
 	}
 	t, err := time.Parse(time.RFC3339, string(p))
@@ -282,5 +292,6 @@ func verifySha(bin []byte, sha []byte) bool {
 }
 
 func writeTime(path string, t time.Time) bool {
+	log.Println("Writing time to ", path, t)
 	return ioutil.WriteFile(path, []byte(t.Format(time.RFC3339)), 0644) == nil
 }
